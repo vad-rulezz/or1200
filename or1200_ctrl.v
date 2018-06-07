@@ -70,7 +70,8 @@ module or1200_ctrl
    multicycle, wait_on, wbforw_valid, sig_syscall, sig_trap,
    force_dslot_fetch, no_more_dslot, id_void, ex_void, ex_spr_read, 
    ex_spr_write, 
-   id_mac_op, id_macrc_op, ex_macrc_op, rfe, except_illegal, dc_no_writethrough
+   id_mac_op, id_macrc_op, ex_macrc_op, rfe, except_illegal, dc_no_writethrough,
+   flagforw, flagwe
    );
 
 //
@@ -136,6 +137,8 @@ output					ex_macrc_op;
 output					rfe;
 output					except_illegal;
 output  				dc_no_writethrough;
+output					flagforw;
+output					flagwe;
    
 				
 //
@@ -184,14 +187,19 @@ reg     [31:2]				ex_branch_addrtarget;
 `ifdef OR1200_DC_NOSTACKWRITETHROUGH
 reg 					dc_no_writethrough;
 `endif
+reg					flagforw;
+reg					flagwe;
+reg					atomic_inprogress = 1'b0;
+reg					atomic_completed  = 1'b0;
+wire              if_lwa_op;
    
 //
 // Register file read addresses
 //
 assign rf_addra = if_insn[20:16];
 assign rf_addrb = if_insn[15:11];
-assign rf_rda = if_insn[31] || if_maci_op;
-assign rf_rdb = if_insn[30];
+assign rf_rda = if_insn[31] || if_maci_op || if_lwa_op;
+assign rf_rdb = if_insn[30] && !if_lwa_op;
 
 //
 // Force fetch of delay slot instruction when jump/branch is preceeded by 
@@ -275,8 +283,9 @@ always @(id_insn) begin
 		id_simm = {{16{id_insn[15]}}, id_insn[15:0]};
 
 	// l.lxx (load instructions)
+	`OR1200_OR32_LWA,
 	`OR1200_OR32_LWZ, `OR1200_OR32_LWS,
-   `OR1200_OR32_LBZ, `OR1200_OR32_LBS,
+	`OR1200_OR32_LBZ, `OR1200_OR32_LBS,
 	`OR1200_OR32_LHZ, `OR1200_OR32_LHS:
 		id_simm = {{16{id_insn[15]}}, id_insn[15:0]};
 
@@ -297,7 +306,7 @@ always @(id_insn) begin
 		id_simm = {16'b0, id_insn[25:21], id_insn[10:0]};
 
 	// l.sxx (store instructions)
-	`OR1200_OR32_SW, `OR1200_OR32_SH, `OR1200_OR32_SB:
+	`OR1200_OR32_SWA, `OR1200_OR32_SW, `OR1200_OR32_SH, `OR1200_OR32_SB:
 		id_simm = {{16{id_insn[25]}}, id_insn[25:21], id_insn[10:0]};
 
 	// l.xori
@@ -616,6 +625,10 @@ always @(posedge clk or `OR1200_RST_EVENT rst) begin
 	      sel_imm <=  1'b0;
 `endif
 
+	    // l.swa
+	    `OR1200_OR32_SWA:
+	      sel_imm <=  1'b0;
+
 	    // l.sw
 	    `OR1200_OR32_SW:
 	      sel_imm <=  1'b0;
@@ -684,6 +697,7 @@ always @(posedge clk or `OR1200_RST_EVENT rst) begin
 `ifdef OR1200_MAC_IMPLEMENTED
 		`OR1200_OR32_MACI,
 `endif
+		`OR1200_OR32_LWA,
 		`OR1200_OR32_LWZ,
 		`OR1200_OR32_LWS,
 		`OR1200_OR32_LBZ,
@@ -704,6 +718,7 @@ always @(posedge clk or `OR1200_RST_EVENT rst) begin
 `ifdef OR1200_MAC_IMPLEMENTED
 		`OR1200_OR32_MACMSB,
 `endif
+		`OR1200_OR32_SWA,
 		`OR1200_OR32_SW,
 		`OR1200_OR32_SB,
 		`OR1200_OR32_SH,
@@ -957,6 +972,10 @@ always @(posedge clk or `OR1200_RST_EVENT rst) begin
 		`OR1200_OR32_MFSPR:
 			rfwb_op <=  {`OR1200_RFWBOP_SPRS, 1'b1};
 		  
+		// l.lwa
+		`OR1200_OR32_LWA:
+			rfwb_op <=  {`OR1200_RFWBOP_LSU, 1'b1};
+
 		// l.lwz
 		`OR1200_OR32_LWZ:
 			rfwb_op <=  {`OR1200_RFWBOP_LSU, 1'b1};
@@ -1095,8 +1114,12 @@ always @(posedge clk or `OR1200_RST_EVENT rst)
 //
 // Decode of id_lsu_op
 //
-always @(id_insn) begin
+always @(id_insn or atomic_inprogress) begin
 	case (id_insn[31:26])		// synopsys parallel_case
+
+	// l.lwa
+	`OR1200_OR32_LWA:
+		id_lsu_op =  `OR1200_LSUOP_LWZ;
 
 	// l.lwz
 	`OR1200_OR32_LWZ:
@@ -1122,6 +1145,13 @@ always @(id_insn) begin
 	`OR1200_OR32_LHS:
 		id_lsu_op =  `OR1200_LSUOP_LHS;
 
+	// l.swa
+	`OR1200_OR32_SWA:
+		if (atomic_inprogress)
+			id_lsu_op = `OR1200_LSUOP_SW;
+		else
+			id_lsu_op = `OR1200_LSUOP_NOP;
+
 	// l.sw
 	`OR1200_OR32_SW:
 		id_lsu_op =  `OR1200_LSUOP_SW;
@@ -1139,6 +1169,33 @@ always @(id_insn) begin
 		id_lsu_op =  `OR1200_LSUOP_NOP;
 
 	endcase
+end
+
+assign if_lwa_op = (if_insn[31:26] == `OR1200_OR32_LWA);
+
+always @(posedge clk) begin
+	if ( !id_freeze & atomic_completed ) begin
+		atomic_inprogress <= 1'b0;
+		atomic_completed  <= 1'b0;
+	end
+
+	else begin
+		if (id_insn[31:26] == `OR1200_OR32_LWA) begin
+			atomic_inprogress <= 1'b1;
+			atomic_completed  <= 1'b0;
+		end
+
+		else if (id_lsu_op != `OR1200_LSUOP_NOP)
+			atomic_completed <= 1'b1;
+	end
+end
+
+always @(id_insn or atomic_inprogress) begin
+	if (id_insn[31:26] == `OR1200_OR32_SWA) begin
+		flagforw <= atomic_inprogress;
+		flagwe   <= 1'b1;
+	end else
+		flagwe   <= 1'b0;
 end
 
 //

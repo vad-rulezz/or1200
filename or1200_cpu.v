@@ -269,6 +269,8 @@ wire				flagforw_alu;
 wire				flag_we_alu;
 wire				flagforw_fpu;
 wire				flag_we_fpu;
+wire				flagforw_ctl;
+wire				flag_we_ctl;
 wire				carry;
 wire				cyforw;
 wire				cy_we_alu;
@@ -396,8 +398,8 @@ assign supv = sr[`OR1200_SR_SM];
 //
 // FLAG write enable
 //
-assign flagforw = (flag_we_alu & flagforw_alu) | (flagforw_fpu & flag_we_fpu);
-assign flag_we = (flag_we_alu | flag_we_fpu) & ~abort_mvspr;
+assign flagforw = (flag_we_alu & flagforw_alu) | (flagforw_fpu & flag_we_fpu) | (flagforw_ctl & flag_we_ctl);
+assign flag_we = (flag_we_alu | flag_we_fpu | flag_we_ctl) & ~abort_mvspr;
 
 //
 // Flag for any MTSPR instructions, that must block execution, to indicate done
@@ -534,7 +536,9 @@ or1200_ctrl or1200_ctrl(
 	.rfe(rfe),
 	.du_hwbkpt(du_hwbkpt),
 	.except_illegal(except_illegal),
-	.dc_no_writethrough(dc_no_writethrough)
+	.dc_no_writethrough(dc_no_writethrough),
+	.flagforw(flagforw_ctl),
+	.flagwe(flag_we_ctl)
 );
 
 //

@@ -697,6 +697,11 @@
 `define OR1200_OR32_JR                6'b010001
 `define OR1200_OR32_JALR              6'b010010
 `define OR1200_OR32_MACI              6'b010011
+`define OR1200_OR32_LWA               6'b011011
+`define OR1200_OR32_CUST1             6'b011100
+`define OR1200_OR32_CUST2             6'b011101
+`define OR1200_OR32_CUST3             6'b011110
+`define OR1200_OR32_CUST4             6'b011111
 /* */
 `define OR1200_OR32_LWZ               6'b100001
 `define OR1200_OR32_LWS               6'b100010
@@ -718,6 +723,8 @@
 `define OR1200_OR32_MACMSB            6'b110001
 `define OR1200_OR32_FLOAT             6'b110010
 /* */
+`define OR1200_OR32_SWA               6'b110011
+`define OR1200_OR32_SD                6'b110100
 `define OR1200_OR32_SW                6'b110101
 `define OR1200_OR32_SB                6'b110110
 `define OR1200_OR32_SH                6'b110111
