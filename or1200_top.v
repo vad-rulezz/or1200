@@ -56,7 +56,7 @@
 
 module or1200_top(
 	// System
-	clk_i, rst_i, pic_ints_i, clmode_i,
+	clk_i, rst_i, pic_ints_i, pic_ints_reset_o, clmode_i,
 
 	// Instruction WISHBONE INTERFACE
 	iwb_clk_i, iwb_rst_i, iwb_ack_i, iwb_err_i, iwb_rty_i, iwb_dat_i,
@@ -110,6 +110,7 @@ input			clk_i;
 input			rst_i;
 input	[1:0]		clmode_i;	// 00 WB=RISC, 01 WB=RISC/2, 10 N/A, 11 WB=RISC/4
 input	[ppic_ints-1:0]	pic_ints_i;
+output[ppic_ints-1:0]	pic_ints_reset_o;
 
 //
 // Instruction WISHBONE interface
@@ -979,7 +980,8 @@ or1200_pic or1200_pic(
 	.intr(sig_int), 
 
 	// PIC Interface
-	.pic_int(pic_ints_i)
+	.pic_int(pic_ints_i),
+	.pic_int_reset(pic_ints_reset_o)
 );
 
 //

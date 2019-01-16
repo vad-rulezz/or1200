@@ -56,7 +56,7 @@ module or1200_pic(
 	pic_wakeup, intr,
 	
 	// PIC Interface
-	pic_int
+	pic_int, pic_int_reset
 );
 
 //
@@ -77,6 +77,7 @@ output		intr;		// interrupt
 // PIC Interface
 //
 input	[`OR1200_PIC_INTS-1:0]	pic_int;// Interrupt inputs
+output reg [`OR1200_PIC_INTS-1:0]	pic_int_reset;// Interrupt resets
 
 `ifdef OR1200_PIC_IMPLEMENTED
 
@@ -90,13 +91,9 @@ wire	[`OR1200_PIC_INTS-1:2]	picmr;	// No PICMR register
 `endif
 
 //
-// PIC Status Register bits (or no register)
+// PIC Status bits
 //
-`ifdef OR1200_PIC_PICSR
-reg	[`OR1200_PIC_INTS-1:0]	picsr;	// PICSR bits
-`else
-wire	[`OR1200_PIC_INTS-1:0]	picsr;	// No PICSR register
-`endif
+wire	[`OR1200_PIC_INTS-1:0]	picsr;
 
 //
 // Internal wires & regs
@@ -129,17 +126,15 @@ assign picmr = (`OR1200_PIC_INTS)'b1;
 //
 // Write to PICSR, both CPU and external ints
 //
-`ifdef OR1200_PIC_PICSR
 always @(posedge clk or `OR1200_RST_EVENT rst)
 	if (rst == `OR1200_RST_VALUE)
-		picsr <= {`OR1200_PIC_INTS{1'b0}};
-	else if (picsr_sel && spr_write) begin
-		picsr <=  spr_dat_i[`OR1200_PIC_INTS-1:0] | um_ints;
-	end else
-		picsr <=  picsr | um_ints;
-`else
+		pic_int_reset <= {`OR1200_PIC_INTS{1'b0}};
+	else if (picsr_sel && spr_write)
+		pic_int_reset <=  spr_dat_i[`OR1200_PIC_INTS-1:0];
+	else
+		pic_int_reset <= {`OR1200_PIC_INTS{1'b0}};
+
 assign picsr = pic_int;
-`endif
 
 //
 // Read PIC registers
