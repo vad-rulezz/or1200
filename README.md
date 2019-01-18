@@ -9,5 +9,5 @@ e.g. ensure that 0x300 (data page fault) exception handler in arch/openrisc/kern
 Recent kernels have it, older ones (3.x) may know nothing about l.swa (0x33 op id) and above check contains 0x34 constant.
 
 ## Edge-triggered interrupts
-Edge-triggered interrupts also need special treatment in linux kernel, ensure that irqchip driver (or just an generic handler in arch/openrisc/kernel/irq.c in older kernels) is configured to acknowledge an interrupt by writing '1' to curresponding bit in PIC.
-"opencores,or1k-pic" one does it, "opencores,or1200-pic" does not.
+Edge-triggered interrupts also need special treatment in linux kernel, ensure that irqchip driver (or just a generic handler in arch/openrisc/kernel/irq.c in older kernels) is configured to acknowledge an interrupt by writing '1' to SR register in PIC (to a bit corresponding to this interrupt).
+"opencores,or1k-pic" one does it, "opencores,or1200-pic" does not (it tries to directly clear that bit instead, it wont work).
