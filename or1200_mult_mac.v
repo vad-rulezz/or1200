@@ -132,7 +132,7 @@ module or1200_mult_mac(
    reg [`OR1200_MACOP_WIDTH-1:0] 	mac_op_r1;
    reg [`OR1200_MACOP_WIDTH-1:0] 	mac_op_r2;
    reg [`OR1200_MACOP_WIDTH-1:0] 	mac_op_r3;
-   reg 					mac_stall_r;
+   wire					mac_stall_r;
    reg [63:0] 				mac_r;
 `else
    wire [`OR1200_MACOP_WIDTH-1:0] 	mac_op_r1;
@@ -422,12 +422,7 @@ module or1200_mult_mac(
    // instructions in EX stage (e.g. inside multiplier)
    // This stall signal is also used by the divider.
    //
-   always @(`OR1200_RST_EVENT rst or posedge clk)
-     if (rst == `OR1200_RST_VALUE)
-       mac_stall_r <=  1'b0;
-     else
-       mac_stall_r <=  (|mac_op | (|mac_op_r1) | (|mac_op_r2)) & 
-		       (id_macrc_op | mac_stall_r);
+   assign mac_stall_r = |mac_op & ~(|mac_op_r3);
    
 `else // OR1200_MAC_IMPLEMENTED
    assign mac_stall_r = 1'b0;
