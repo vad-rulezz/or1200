@@ -156,7 +156,7 @@ wire				icfsm_first_miss_ack;
 wire				icfsm_first_miss_err;
 wire				icfsm_burst;
 wire				icfsm_tag_we;
-reg 				ic_inv_q;
+wire				icfsm_tag_v;
    
 `ifdef OR1200_BIST
 //
@@ -179,7 +179,7 @@ assign ictag_addr = ic_inv ?
 		    spr_dat_i[`OR1200_ICINDXH:`OR1200_ICLS] : 
 		    ic_addr[`OR1200_ICINDXH:`OR1200_ICLS];
 assign ictag_en = ic_inv | ic_en;
-assign ictag_v = ~ic_inv;
+assign ictag_v = ~ic_inv & icfsm_tag_v;
 
 //
 // Data to BIU is from ICRAM when IC is enabled or from LSU when
@@ -220,16 +220,6 @@ assign to_icram = icbiu_dat_i;
 assign icqmem_dat_o = icfsm_first_miss_ack | !ic_en ? icbiu_dat_i : from_icram;
 
 //
-// Detect falling edge of IC invalidate signal
-// 
-always @(posedge clk or `OR1200_RST_EVENT rst)
-   if (rst==`OR1200_RST_VALUE)
-     ic_inv_q <= 1'b0;
-   else
-     ic_inv_q <= ic_inv;
-   
-   
-//
 // Tag comparison
 //
 // During line invalidate, ensure it stays the same
@@ -260,7 +250,8 @@ or1200_ic_fsm or1200_ic_fsm(
 	.first_miss_ack(icfsm_first_miss_ack),
 	.first_miss_err(icfsm_first_miss_err),
 	.burst(icfsm_burst),
-	.tag_we(icfsm_tag_we)
+	.tag_we(icfsm_tag_we),
+	.tag_v(icfsm_tag_v)
 );
 
 //

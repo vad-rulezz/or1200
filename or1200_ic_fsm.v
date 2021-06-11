@@ -55,7 +55,7 @@
 `define OR1200_ICFSM_IDLE	2'd0
 `define OR1200_ICFSM_CFETCH	2'd1
 `define OR1200_ICFSM_LREFILL3	2'd2
-`define OR1200_ICFSM_IFETCH	2'd3
+`define OR1200_ICFSM_COOLDOWN	2'd3
 
 //
 // Instruction cache FSM
@@ -70,7 +70,7 @@ module or1200_ic_fsm(
 	tagcomp_miss, 
 	biudata_valid, biudata_error, 
         start_addr, saved_addr,
-	icram_we, tag_we,
+	icram_we, tag_we, tag_v,
         biu_read, 
         first_hit_ack, first_miss_ack, first_miss_err,
 	burst
@@ -96,6 +96,7 @@ output				first_miss_ack;
 output				first_miss_err;
 output				burst;
 output				tag_we;
+output				tag_v;
 
 //
 // Internal wires and regs
@@ -113,6 +114,8 @@ reg 				last_eval_miss; // JPB
    //
    assign icram_we = {4{biu_read & biudata_valid & !cache_inhibit}};
    assign tag_we = biu_read & biudata_valid & !cache_inhibit;
+
+   assign tag_v = (state == `OR1200_ICFSM_LREFILL3) & !(|cnt);
 
    //
    // BIU read and write
@@ -206,10 +209,7 @@ reg 				last_eval_miss; // JPB
 	     else if (!icqmem_cycstb_i
 		      & !last_eval_miss // JPB
 		      ) begin	
-		state <=  `OR1200_ICFSM_IDLE;
-		hitmiss_eval <=  1'b0;
-		load <=  1'b0;
-		cache_inhibit <=  1'b0;
+		state <=  `OR1200_ICFSM_COOLDOWN;
 	     end
 	     // fetch hit, wait in this state for now
 	     else if (!tagcomp_miss & !icqmem_ci_i) begin
@@ -221,8 +221,15 @@ reg 				last_eval_miss; // JPB
 
 	     if (hitmiss_eval & !tagcomp_miss) // JPB
 	       last_eval_miss <= 1; // JPB
-	     
 	  end
+          `OR1200_ICFSM_COOLDOWN : begin
+             if (icqmem_cycstb_i) begin
+               if (start_addr == saved_addr_r)
+                 state <= `OR1200_ICFSM_CFETCH;
+               else if (biudata_valid)
+                 state <= `OR1200_ICFSM_IDLE;
+             end
+          end
 	  `OR1200_ICFSM_LREFILL3 : begin
 	     // abort because IC has just been turned off
              if (!ic_en) begin
